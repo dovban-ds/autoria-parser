@@ -47,23 +47,20 @@ carsArray.forEach((item, index) => {
   brandOptions.reply_markup = JSON.stringify(replyMarkup);
 });
 
-const modelOptions = {
-  reply_markup: JSON.stringify({
-    inline_keyboard: [],
-  }),
-};
-
 const textStart =
   "Welcome to the autoria-parser tool! \n\nDeveloped by Dovban D.\n\nPackages used in app: puppeteer, telegram-bot-api";
 
-const textChooseCar =
-  "Choose the car to find among most popular or enter your own brand";
+const textChooseCar = `Choose the car to find among the most popular or enter your own brand`;
 
 const textChooseModel = "Choose the car model to find";
-const textError = "Try to use one of offered fields!";
+
+const textSpecificBrand =
+  "Let me try to find this brand ... \nOr choose among the most popular";
+
+let actualContext = "initial";
 
 bot.on("message", async (msg) => {
-  // console.log(msg);
+  console.log();
 
   const text = msg.text;
   const chatId = msg.chat.id;
@@ -71,46 +68,82 @@ bot.on("message", async (msg) => {
   if (text === "/start") {
     await bot.sendMessage(chatId, textStart);
     return bot.sendMessage(chatId, textChooseCar, brandOptions);
+  } else if (actualContext === "initial") {
+    return bot.sendMessage(chatId, textSpecificBrand, brandOptions);
   }
-
-  // if (carsArray.findIndex((txt) => txt === text)) {
-  //   return bot.sendMessage(chatId, `find ${text}`);
-  // }
-
-  // it (msg.message === )
-
-  // return bot.sendMessage(chatId, textError);
-
-  // await page.keyboard.type('World', {delay: 100});
 });
 
+let models = null;
+
 bot.on("callback_query", async (msg) => {
-  // console.log(msg.data);
+  // console.log(msg);
 
   const chatId = msg.message.chat.id;
+  const messageId = msg.message.message_id;
 
-  if (carsArray.findIndex((txt) => txt === msg.data)) {
-    // searchParams.carBrand = msg.data;
+  // console.log(msg.message.text);
 
-    // console.log('success');
+  if (
+    carsArray.findIndex((txt) => txt === msg.data) !== -1 &&
+    msg.data !== "Restart"
+  ) {
+    const modelOptions = {
+      reply_markup: JSON.stringify({
+        inline_keyboard: [],
+      }),
+    };
 
-    const modelsArray = await scrapeModel("https://auto.ria.com/uk/", msg.data);
+    searchParams.carBrand = msg.data;
 
-    modelsArray.forEach((item, index) => {
-      const replyMarkup = JSON.parse(modelOptions.reply_markup);
+    try {
+      const modelsArray = await scrapeModel(
+        "https://auto.ria.com/uk/",
+        msg.data
+      );
 
-      const newItem = { text: item, callback_data: item };
+      models = modelsArray;
 
-      if (index % 3 === 0) {
-        replyMarkup.inline_keyboard.push([newItem]);
-      } else {
-        const lastIndex = replyMarkup.inline_keyboard.length - 1;
-        replyMarkup.inline_keyboard[lastIndex].push(newItem);
-      }
+      modelsArray.forEach((item, index) => {
+        const replyMarkup = JSON.parse(modelOptions.reply_markup);
 
-      modelOptions.reply_markup = JSON.stringify(replyMarkup);
+        const newItem = { text: item, callback_data: item };
+
+        if (index % 3 === 0) {
+          replyMarkup.inline_keyboard.push([newItem]);
+        } else {
+          const lastIndex = replyMarkup.inline_keyboard.length - 1;
+          replyMarkup.inline_keyboard[lastIndex].push(newItem);
+        }
+
+        if (index === modelsArray.length - 1)
+          replyMarkup.inline_keyboard.push([
+            { text: "Restart", callback_data: "Restart" },
+          ]);
+
+        modelOptions.reply_markup = JSON.stringify(replyMarkup);
+      });
+
+      return bot.editMessageText(textChooseModel, {
+        chat_id: chatId,
+        message_id: messageId,
+        reply_markup: modelOptions.reply_markup,
+      });
+    } catch (error) {
+      console.error("Error while scraping models:", error.message);
+      return bot.sendMessage(
+        chatId,
+        "Error occurred while fetching models. Please try again later."
+      );
+    }
+  } else if (msg.data === "Restart") {
+    return bot.editMessageText(textChooseCar, {
+      chat_id: chatId,
+      message_id: messageId,
+      reply_markup: brandOptions.reply_markup,
     });
+  } else if (models.findIndex((txt) => txt === msg.data) !== -1) {
+    searchParams.carModel = msg.data;
 
-    return bot.sendMessage(chatId, textChooseModel, modelOptions);
+    console.log(searchParams);
   }
 });
