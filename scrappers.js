@@ -7,16 +7,6 @@ export async function scrapeAuto(url) {
 
   await page.goto(url);
 
-  // const [el] = await page.$x(
-  //   '//*[@id="photosBlock"]/div[1]/div[1]/div[1]/picture/img'
-  // );
-
-  // const src = await el.getProperty("src");
-
-  // const srcTxt = await src.jsonValue();
-
-  // console.log({ srcTxt });
-
   const list = await page.$$("#brandTooltipBrandAutocomplete-brand > ul > li");
 
   const texts = [];

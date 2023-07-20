@@ -47,6 +47,8 @@ carsArray.forEach((item, index) => {
   brandOptions.reply_markup = JSON.stringify(replyMarkup);
 });
 
+const currYear = new Date();
+
 const textStart =
   "Welcome to the autoria-parser tool! \n\nDeveloped by Dovban D.\n\nPackages used in app: puppeteer, telegram-bot-api";
 
@@ -57,10 +59,24 @@ const textChooseModel = "Choose the car model to find";
 const textSpecificBrand =
   "Let me try to find this brand ... \nOr choose among the most popular";
 
-let actualContext = "initial";
+const textChooseYearFrom = `Now enter a year FROM (1900 - ${currYear.getFullYear()}) in a chat or press restart button`;
+const textChooseYearTo = `Now pick a year TO (1900 - ${currYear.getFullYear()}) in a chat or press restart button`;
+
+const numberPattern = /^[0-9]+$/;
+const budgetPattern = /^[0-9]+(\$)?$/;
+
+const textValidYear = `Input valid year from 1900 to ${currYear.getFullYear()} or press restart/skip`;
+
+const textChooseBudgetFrom = `Specify budget FROM (integers only, $) or press restart/skip`;
+const textChooseBudgetTo = `Specify budget TO (integers only, $) or press restart/skip`;
+const textError =
+  "Error occurred while fetching models. Please try again later.";
+
+let actualContext = "brand";
+let lastMessageId;
 
 bot.on("message", async (msg) => {
-  console.log();
+  // console.log(msg);
 
   const text = msg.text;
   const chatId = msg.chat.id;
@@ -68,8 +84,139 @@ bot.on("message", async (msg) => {
   if (text === "/start") {
     await bot.sendMessage(chatId, textStart);
     return bot.sendMessage(chatId, textChooseCar, brandOptions);
-  } else if (actualContext === "initial") {
+  } else if (actualContext === "brand") {
     return bot.sendMessage(chatId, textSpecificBrand, brandOptions);
+  } else if (actualContext === "yearFrom" && numberPattern.test(text)) {
+    actualContext = "yearTo";
+
+    searchParams.carYearFrom = text;
+
+    // return bot.sendMessage(chatId, textChooseYearTo, {
+    //   reply_markup: JSON.stringify({
+    //     inline_keyboard: [
+    //       [
+    //         { text: "Skip", callback_data: "Skip" },
+    //         { text: "Restart", callback_data: "Restart" },
+    //       ],
+    //     ],
+    //   }),
+    // });
+
+    return bot
+      .editMessageText(textChooseYearTo, {
+        chat_id: chatId,
+        message_id: lastMessageId,
+        reply_markup: JSON.stringify({
+          inline_keyboard: [
+            [
+              { text: "Skip", callback_data: "Skip" },
+              { text: "Restart", callback_data: "Restart" },
+            ],
+          ],
+        }),
+      })
+      .then((sentMessage) => {
+        lastMessageId = sentMessage.message_id;
+      });
+  } else if (
+    (actualContext === "yearFrom" || actualContext === "yearTo") &&
+    !numberPattern.test(text)
+  ) {
+    return bot.sendMessage(chatId, textValidYear, {
+      reply_markup: JSON.stringify({
+        inline_keyboard: [
+          [
+            { text: "Skip", callback_data: "Skip" },
+            { text: "Restart", callback_data: "Restart" },
+          ],
+        ],
+      }),
+    });
+  } else if (actualContext === "yearTo" && numberPattern.test(text)) {
+    actualContext = "budgetFrom";
+
+    searchParams.carYearTo = text;
+
+    // return bot
+    //   .sendMessage(chatId, textChooseBudgetFrom, {
+    //     reply_markup: JSON.stringify({
+    //       inline_keyboard: [
+    //         [
+    //           { text: "Skip", callback_data: "Skip" },
+    //           { text: "Restart", callback_data: "Restart" },
+    //         ],
+    //       ],
+    //     }),
+    //   })
+    //   .then((sentMessage) => {
+    //     lastMessageId = sentMessage.message_id;
+    //   });
+
+    return bot
+      .editMessageText(textChooseBudgetFrom, {
+        chat_id: chatId,
+        message_id: lastMessageId,
+        reply_markup: JSON.stringify({
+          inline_keyboard: [
+            [
+              { text: "Skip", callback_data: "Skip" },
+              { text: "Restart", callback_data: "Restart" },
+            ],
+          ],
+        }),
+      })
+      .then((sentMessage) => {
+        lastMessageId = sentMessage.message_id;
+      });
+  } else if (actualContext === "budgetFrom" && budgetPattern.test(text)) {
+    actualContext = "budgetTo";
+
+    searchParams.carBudgetFrom = text;
+
+    // return bot.sendMessage(chatId, textChooseBudgetFrom, {
+    //   reply_markup: JSON.stringify({
+    //     inline_keyboard: [
+    //       [
+    //         { text: "Skip", callback_data: "Skip" },
+    //         { text: "Restart", callback_data: "Restart" },
+    //       ],
+    //     ],
+    //   }),
+    // });
+
+    return bot
+      .editMessageText(textChooseBudgetTo, {
+        chat_id: chatId,
+        message_id: lastMessageId,
+        reply_markup: JSON.stringify({
+          inline_keyboard: [
+            [
+              { text: "Skip", callback_data: "Skip" },
+              { text: "Restart", callback_data: "Restart" },
+            ],
+          ],
+        }),
+      })
+      .then((sentMessage) => {
+        lastMessageId = sentMessage.message_id;
+      });
+  } else if (actualContext === "budgetTo" && budgetPattern.test(text)) {
+    actualContext = "finish";
+
+    searchParams.carBudgetTo = text;
+
+    return bot.editMessageText("success", {
+      chat_id: chatId,
+      message_id: lastMessageId,
+      reply_markup: JSON.stringify({
+        inline_keyboard: [
+          [
+            { text: "Skip", callback_data: "Skip" },
+            { text: "Restart", callback_data: "Restart" },
+          ],
+        ],
+      }),
+    });
   }
 });
 
@@ -94,14 +241,13 @@ bot.on("callback_query", async (msg) => {
     };
 
     searchParams.carBrand = msg.data;
+    actualContext = "model";
 
     try {
       const modelsArray = await scrapeModel(
         "https://auto.ria.com/uk/",
         msg.data
       );
-
-      models = modelsArray;
 
       modelsArray.forEach((item, index) => {
         const replyMarkup = JSON.parse(modelOptions.reply_markup);
@@ -123,6 +269,8 @@ bot.on("callback_query", async (msg) => {
         modelOptions.reply_markup = JSON.stringify(replyMarkup);
       });
 
+      models = modelsArray;
+
       return bot.editMessageText(textChooseModel, {
         chat_id: chatId,
         message_id: messageId,
@@ -130,10 +278,7 @@ bot.on("callback_query", async (msg) => {
       });
     } catch (error) {
       console.error("Error while scraping models:", error.message);
-      return bot.sendMessage(
-        chatId,
-        "Error occurred while fetching models. Please try again later."
-      );
+      return bot.sendMessage(chatId, textError);
     }
   } else if (msg.data === "Restart") {
     return bot.editMessageText(textChooseCar, {
@@ -144,6 +289,23 @@ bot.on("callback_query", async (msg) => {
   } else if (models.findIndex((txt) => txt === msg.data) !== -1) {
     searchParams.carModel = msg.data;
 
-    console.log(searchParams);
+    actualContext = "yearFrom";
+
+    lastMessageId = messageId;
+
+    return bot.editMessageText(textChooseYearFrom, {
+      chat_id: chatId,
+      message_id: messageId,
+      reply_markup: JSON.stringify({
+        inline_keyboard: [
+          [
+            { text: "Skip", callback_data: "Skip" },
+            { text: "Restart", callback_data: "Restart" },
+          ],
+        ],
+      }),
+    });
+
+    // console.log(searchParams);
   }
 });
