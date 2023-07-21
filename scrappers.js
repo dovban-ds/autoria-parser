@@ -145,16 +145,13 @@ export async function scrapeFullInfo(url, searchParams) {
   ]);
 
   await page.click("#paginationChangeSize");
-  await page.click("#paginationSizeOptions > a.item.mhide");
+  await page.click("#paginationSizeOptions > a:nth-child(2)");
 
-  await page.waitForSelector("#searchResults > section:nth-child(9)");
-
-  // #searchResults > section
-
-  // const list = await page.$$("#searchResults > section");
+  await page.waitForXPath('//*[@id="wrapperFooter"]/div[1]/div');
 
   const fullData = await page.evaluate(() => {
     const carsBlocks = Array.from(document.querySelectorAll(".content-bar"));
+
     const data = carsBlocks.map((car) => ({
       title: car.querySelector(".content .head-ticket .item a ").innerText,
       price: car.querySelector(".content .price-ticket span").innerText,
@@ -175,14 +172,20 @@ export async function scrapeFullInfo(url, searchParams) {
       vin: car.querySelector(
         ".content .definition-data .base_information .label-vin"
       )?.innerText,
+      reg: car.querySelector(
+        ".content .definition-data .base-information .state-num"
+      )?.innerText,
       description: car.querySelector(".content .definition-data p").innerText,
+      link: car
+        .querySelector(".content .head-ticket .item a")
+        .getAttribute("href"),
     }));
     return data;
   });
 
   browser.close();
 
-  console.log(fullData);
+  // console.log(fullData);
 
   return fullData;
 }
