@@ -14,6 +14,11 @@ const searchParams = {
   carBudgetTo: null,
 };
 
+// let { carBrand, carModel, carYearFrom, carYearTo, carBudgetFrom, carBudgetTo } =
+//   searchParams;
+
+// const filter = `\nВаші налаштування:\nМарка: ${carBrand} ${carModel}`
+
 const brandOptions = {
   reply_markup: JSON.stringify({
     inline_keyboard: [],
@@ -26,8 +31,6 @@ let modelOptions = {
 };
 
 const carsArray = await scrapeAuto("https://auto.ria.com/uk/");
-
-// console.log(carsArray);
 
 carsArray.forEach((item, index) => {
   const replyMarkup = JSON.parse(brandOptions.reply_markup);
@@ -49,17 +52,15 @@ const currYear = new Date().getFullYear();
 const textStart =
   "Welcome to the autoria-parser tool! \n\nDeveloped by Dovban D.\n\nPackages used in app: puppeteer, node-telegram-bot-api";
 
-const textChooseCar = `Оберіть марку для пошуку, або введіть свій варіант`;
+const textChooseCar = `Оберіть марку для пошуку або введіть свій варіант`;
 
 const textChooseModel = "Оберіть модель для пошуку";
 
-// const textSpecificBrand =
-//   "Let me try to find this brand ... \nOr choose among the most popular";
 const textSpecificModel =
   "Будь ласка, оберіть модель із запропонованого списку";
 
-const textChooseYearFrom = `Вкажіть рік для пошуку ВІД (1900 - ${currYear}) в чат, або натисніть СПОЧАТКУ`;
-const textChooseYearTo = `Вкажіть рік для пошуку ДО (1900 - ${currYear}) в чат, або натисніть СПОЧАТКУ`;
+const textChooseYearFrom = `Вкажіть рік для пошуку ВІД (1900 - ${currYear}) в чат або натисніть СПОЧАТКУ/ПРОПУСТИТИ`;
+const textChooseYearTo = `Вкажіть рік для пошуку ДО (1900 - ${currYear}) в чат або натисніть СПОЧАТКУ/ПРОПУСТИТИ`;
 
 const numberPattern = /^[0-9]+$/;
 const budgetPattern = /^[0-9]*\$?$/;
@@ -75,10 +76,17 @@ const textError =
 let actualContext = "brand";
 let lastMessageId;
 let editStatus = false;
+let lastUserMessageId;
+let sentCars = [];
 
 bot.on("message", async (msg) => {
   const text = msg.text;
   const chatId = msg.chat.id;
+  const msgId = msg.message_id;
+
+  lastUserMessageId = msgId;
+
+  await bot.deleteMessage(chatId, msgId);
 
   if (text === "/start") {
     await bot.sendMessage(chatId, textStart);
@@ -89,17 +97,6 @@ bot.on("message", async (msg) => {
       });
   } else if (actualContext === "brand") {
     if (editStatus) return;
-
-    // return bot
-    //   .editMessageText(textSpecificBrand, {
-    //     chat_id: chatId,
-    //     message_id: lastMessageId,
-    //     reply_markup: brandOptions.reply_markup,
-    //   })
-    //   .then((sentMessage) => {
-    //     lastMessageId = sentMessage.message_id;
-    //   })
-    //   .then(() => (editStatus = true));
 
     modelOptions = {
       reply_markup: JSON.stringify({
@@ -170,7 +167,7 @@ bot.on("message", async (msg) => {
         reply_markup: JSON.stringify({
           inline_keyboard: [
             [
-              { text: "Skip", callback_data: "Skip" },
+              { text: "Пропустити", callback_data: "Пропустити" },
               { text: "Спочатку", callback_data: "Спочатку" },
             ],
           ],
@@ -196,7 +193,7 @@ bot.on("message", async (msg) => {
         reply_markup: JSON.stringify({
           inline_keyboard: [
             [
-              { text: "Skip", callback_data: "Skip" },
+              { text: "Пропустити", callback_data: "Пропустити" },
               { text: "Спочатку", callback_data: "Спочатку" },
             ],
           ],
@@ -220,7 +217,7 @@ bot.on("message", async (msg) => {
         reply_markup: JSON.stringify({
           inline_keyboard: [
             [
-              { text: "Skip", callback_data: "Skip" },
+              { text: "Пропустити", callback_data: "Пропустити" },
               { text: "Спочатку", callback_data: "Спочатку" },
             ],
           ],
@@ -243,17 +240,38 @@ bot.on("message", async (msg) => {
       searchParams
     );
 
+    if (typeof fullData === "string") {
+      let filter = `\nВаші налаштування:\nМарка: ${searchParams.carBrand} ${searchParams.carModel}`;
+
+      if (searchParams.carYearFrom)
+        filter += `\nРік випуску (від): ${searchParams.carYearFrom}`;
+      if (searchParams.carYearTo)
+        filter += `\nРік випуску (до): ${searchParams.carYearTo}`;
+      if (searchParams.carBudgetFrom)
+        filter += `\nБюджет (від): ${searchParams.carBudgetFrom}$`;
+      if (searchParams.carBudgetTo)
+        filter += `\nБюджет (до): ${searchParams.carBudgetTo}$`;
+
+      return bot
+        .editMessageText(fullData + filter, {
+          chat_id: chatId,
+          message_id: lastMessageId,
+          reply_markup: JSON.stringify({
+            inline_keyboard: [
+              [{ text: "Спочатку", callback_data: "Спочатку" }],
+            ],
+          }),
+        })
+        .then(() => (actualContext = "finish"))
+        .then(() => (editStatus = false));
+    }
+
     await bot
-      .editMessageText("Trying to find something that fit you...", {
+      .editMessageText("Спробую знайти варіанти для Вас...", {
         chat_id: chatId,
         message_id: lastMessageId,
         reply_markup: JSON.stringify({
-          inline_keyboard: [
-            [
-              { text: "Skip", callback_data: "Skip" },
-              { text: "Спочатку", callback_data: "Спочатку" },
-            ],
-          ],
+          inline_keyboard: [[{ text: "Спочатку", callback_data: "Спочатку" }]],
         }),
       })
       .then(() => (actualContext = "finish"))
@@ -270,14 +288,18 @@ bot.on("message", async (msg) => {
         cap += `Опис: ${data.description} \n`;
       }
 
-      bot.sendPhoto(
-        chatId,
-        data.photo ||
-          "https://img6.auto.ria.com/images/nophoto/no-photo-295x195.jpg",
-        {
-          caption: cap,
-        }
-      );
+      bot
+        .sendPhoto(
+          chatId,
+          data.photo ||
+            "https://img6.auto.ria.com/images/nophoto/no-photo-295x195.jpg",
+          {
+            caption: cap,
+          }
+        )
+        .then((sentMessage) => {
+          sentCars.push(sentMessage.message_id);
+        });
     });
   } else if (
     ((actualContext === "yearFrom" || actualContext === "yearTo") &&
@@ -294,7 +316,7 @@ bot.on("message", async (msg) => {
         reply_markup: JSON.stringify({
           inline_keyboard: [
             [
-              { text: "Skip", callback_data: "Skip" },
+              { text: "Пропустити", callback_data: "Пропустити" },
               { text: "Спочатку", callback_data: "Спочатку" },
             ],
           ],
@@ -319,7 +341,7 @@ bot.on("message", async (msg) => {
         reply_markup: JSON.stringify({
           inline_keyboard: [
             [
-              { text: "Skip", callback_data: "Skip" },
+              { text: "Пропустити", callback_data: "Пропустити" },
               { text: "Спочатку", callback_data: "Спочатку" },
             ],
           ],
@@ -339,8 +361,8 @@ bot.on("message", async (msg) => {
         reply_markup: JSON.stringify({
           inline_keyboard: [
             [
-              { text: "Skip", callback_data: "Skip" },
-              { text: "Restart", callback_data: "Restart" },
+              { text: "Пропустити", callback_data: "Пропустити" },
+              { text: "Спочатку", callback_data: "Спочатку" },
             ],
           ],
         }),
@@ -360,8 +382,8 @@ bot.on("message", async (msg) => {
         reply_markup: JSON.stringify({
           inline_keyboard: [
             [
-              { text: "Skip", callback_data: "Skip" },
-              { text: "Restart", callback_data: "Restart" },
+              { text: "Пропустити", callback_data: "Пропустити" },
+              { text: "Спочатку", callback_data: "Спочатку" },
             ],
           ],
         }),
@@ -386,7 +408,7 @@ bot.on("callback_query", async (msg) => {
 
   if (
     carsArray.findIndex((txt) => txt === msg.data) !== -1 &&
-    msg.data !== "Restart"
+    msg.data !== "Спочатку"
   ) {
     modelOptions = {
       reply_markup: JSON.stringify({
@@ -415,7 +437,7 @@ bot.on("callback_query", async (msg) => {
 
         if (index === modelsArray.length - 1)
           replyMarkup.inline_keyboard.push([
-            { text: "Restart", callback_data: "Restart" },
+            { text: "Спочатку", callback_data: "Спочатку" },
           ]);
 
         modelOptions.reply_markup = JSON.stringify(replyMarkup);
@@ -434,7 +456,7 @@ bot.on("callback_query", async (msg) => {
       console.error("Error while scraping models:", error.message);
       return bot.sendMessage(chatId, textError);
     }
-  } else if (msg.data === "Skip" && actualContext === "yearFrom") {
+  } else if (msg.data === "Пропустити" && actualContext === "yearFrom") {
     return bot
       .editMessageText(textChooseYearTo, {
         chat_id: chatId,
@@ -442,8 +464,8 @@ bot.on("callback_query", async (msg) => {
         reply_markup: JSON.stringify({
           inline_keyboard: [
             [
-              { text: "Skip", callback_data: "Skip" },
-              { text: "Restart", callback_data: "Restart" },
+              { text: "Пропустити", callback_data: "Пропустити" },
+              { text: "Спочатку", callback_data: "Спочатку" },
             ],
           ],
         }),
@@ -452,7 +474,7 @@ bot.on("callback_query", async (msg) => {
         lastMessageId = sentMessage.message_id;
       })
       .then(() => (actualContext = "yearTo"));
-  } else if (msg.data === "Skip" && actualContext === "yearTo") {
+  } else if (msg.data === "Пропустити" && actualContext === "yearTo") {
     return bot
       .editMessageText(textChooseBudgetFrom, {
         chat_id: chatId,
@@ -460,8 +482,8 @@ bot.on("callback_query", async (msg) => {
         reply_markup: JSON.stringify({
           inline_keyboard: [
             [
-              { text: "Skip", callback_data: "Skip" },
-              { text: "Restart", callback_data: "Restart" },
+              { text: "Пропустити", callback_data: "Пропустити" },
+              { text: "Спочатку", callback_data: "Спочатку" },
             ],
           ],
         }),
@@ -470,7 +492,7 @@ bot.on("callback_query", async (msg) => {
         lastMessageId = sentMessage.message_id;
       })
       .then(() => (actualContext = "budgetFrom"));
-  } else if (msg.data === "Skip" && actualContext === "budgetFrom") {
+  } else if (msg.data === "Пропустити" && actualContext === "budgetFrom") {
     return bot
       .editMessageText(textChooseBudgetTo, {
         chat_id: chatId,
@@ -478,8 +500,8 @@ bot.on("callback_query", async (msg) => {
         reply_markup: JSON.stringify({
           inline_keyboard: [
             [
-              { text: "Skip", callback_data: "Skip" },
-              { text: "Restart", callback_data: "Restart" },
+              { text: "Пропустити", callback_data: "Пропустити" },
+              { text: "Спочатку", callback_data: "Спочатку" },
             ],
           ],
         }),
@@ -488,40 +510,44 @@ bot.on("callback_query", async (msg) => {
         lastMessageId = sentMessage.message_id;
       })
       .then(() => (actualContext = "budgetTo"));
-  } else if (msg.data === "Skip" && actualContext === "budgetTo") {
-    // scrapeFullInfo("https://auto.ria.com/uk/", searchParams);
-
-    // return bot
-    //   .editMessageText("success", {
-    //     chat_id: chatId,
-    //     message_id: lastMessageId,
-    //     reply_markup: JSON.stringify({
-    //       inline_keyboard: [
-    //         [
-    //           { text: "Skip", callback_data: "Skip" },
-    //           { text: "Restart", callback_data: "Restart" },
-    //         ],
-    //       ],
-    //     }),
-    //   })
-    //   .then(() => (actualContext = "finish"));
-
+  } else if (msg.data === "Пропустити" && actualContext === "budgetTo") {
     const fullData = await scrapeFullInfo(
       "https://auto.ria.com/uk/",
       searchParams
     );
 
+    if (typeof fullData === "string") {
+      let filter = `\nВаші налаштування:\nМарка: ${searchParams.carBrand} ${searchParams.carModel}`;
+
+      if (searchParams.carYearFrom)
+        filter += `\nРік випуску (від): ${searchParams.carYearFrom}`;
+      if (searchParams.carYearTo)
+        filter += `\nРік випуску (до): ${searchParams.carYearTo}`;
+      if (searchParams.carBudgetFrom)
+        filter += `\nБюджет (від): ${searchParams.carBudgetFrom}$`;
+      if (searchParams.carBudgetTo)
+        filter += `\nБюджет (до): ${searchParams.carBudgetTo}$`;
+
+      return bot
+        .editMessageText(fullData + filter, {
+          chat_id: chatId,
+          message_id: lastMessageId,
+          reply_markup: JSON.stringify({
+            inline_keyboard: [
+              [{ text: "Спочатку", callback_data: "Спочатку" }],
+            ],
+          }),
+        })
+        .then(() => (actualContext = "finish"))
+        .then(() => (editStatus = false));
+    }
+
     await bot
-      .editMessageText("Trying to find something that fit you...", {
+      .editMessageText("Спробую знайти варіанти для Вас...", {
         chat_id: chatId,
         message_id: lastMessageId,
         reply_markup: JSON.stringify({
-          inline_keyboard: [
-            [
-              { text: "Skip", callback_data: "Skip" },
-              { text: "Restart", callback_data: "Restart" },
-            ],
-          ],
+          inline_keyboard: [[{ text: "Спочатку", callback_data: "Спочатку" }]],
         }),
       })
       .then(() => (actualContext = "finish"))
@@ -538,16 +564,29 @@ bot.on("callback_query", async (msg) => {
         cap += `Опис: ${data.description} \n`;
       }
 
-      bot.sendPhoto(
-        chatId,
-        data.photo ||
-          "https://img6.auto.ria.com/images/nophoto/no-photo-295x195.jpg",
-        {
-          caption: cap,
-        }
-      );
+      bot
+        .sendPhoto(
+          chatId,
+          data.photo ||
+            "https://img6.auto.ria.com/images/nophoto/no-photo-295x195.jpg",
+          {
+            caption: cap,
+          }
+        )
+        .then((sentMessage) => {
+          sentCars.push(sentMessage.message_id);
+        });
     });
-  } else if (msg.data === "Restart") {
+  } else if (msg.data === "Спочатку") {
+    searchParams.carYearFrom = null;
+    searchParams.carYearTo = null;
+    searchParams.carBudgetFrom = null;
+    searchParams.carBudgetTo = null;
+
+    for (let car of sentCars) {
+      await bot.deleteMessage(chatId, car);
+    }
+
     return bot
       .editMessageText(textChooseCar, {
         chat_id: chatId,
@@ -567,8 +606,8 @@ bot.on("callback_query", async (msg) => {
         reply_markup: JSON.stringify({
           inline_keyboard: [
             [
-              { text: "Skip", callback_data: "Skip" },
-              { text: "Restart", callback_data: "Restart" },
+              { text: "Пропустити", callback_data: "Пропустити" },
+              { text: "Спочатку", callback_data: "Спочатку" },
             ],
           ],
         }),

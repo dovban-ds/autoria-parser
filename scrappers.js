@@ -89,8 +89,6 @@ export async function scrapeFullInfo(url, searchParams) {
     "#brandTooltipBrandAutocomplete-model > ul > li:nth-child(1) > a"
   );
 
-  // console.log(searchParams);
-
   if (searchParams.carYearFrom) {
     await page.click(
       "#mainSearchForm > div.wrapper > div.item-column.secondary-column > div:nth-child(2) > div > div"
@@ -144,13 +142,22 @@ export async function scrapeFullInfo(url, searchParams) {
     page.click("#mainSearchForm > div.footer-form > button"),
   ]);
 
-  await page.click("#paginationChangeSize");
-  await page.click("#paginationSizeOptions > a:nth-child(2)");
+  const check = await page.waitForSelector("#paginationChangeSize", {
+    timeout: 3000,
+  });
+
+  if (!check) {
+    await page.click("#paginationChangeSize");
+    await page.click("#paginationSizeOptions > a:nth-child(2)");
+  }
 
   await page.waitForXPath('//*[@id="wrapperFooter"]/div[1]/div');
 
   const fullData = await page.evaluate(() => {
     const carsBlocks = Array.from(document.querySelectorAll(".content-bar"));
+
+    if (!carsBlocks.length)
+      return "На жаль, зараз немає варіантів за обраним фільтром, спробуйте ще раз...";
 
     const data = carsBlocks.map((car) => ({
       title: car.querySelector(".content .head-ticket .item a ").innerText,
@@ -184,8 +191,6 @@ export async function scrapeFullInfo(url, searchParams) {
   });
 
   browser.close();
-
-  // console.log(fullData);
 
   return fullData;
 }
