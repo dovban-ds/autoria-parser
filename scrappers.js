@@ -157,7 +157,7 @@ export async function scrapeFullInfo(url, searchParams) {
     const carsBlocks = Array.from(document.querySelectorAll(".content-bar"));
 
     if (!carsBlocks.length)
-      return "На жаль, зараз немає варіантів за обраним фільтром, спробуйте ще раз...";
+      return "На жаль, зараз немає варіантів за обраним фільтром, спробуйте ще раз...\n";
 
     const data = carsBlocks.map((car) => ({
       title: car.querySelector(".content .head-ticket .item a ").innerText,
