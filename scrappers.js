@@ -1,11 +1,29 @@
+// const puppeteer = require('puppeteer-extra')
+
+// // Add stealth plugin and use defaults (all tricks to hide puppeteer usage)
+// const StealthPlugin = require('puppeteer-extra-plugin-stealth')
+// puppeteer.use(StealthPlugin())
+
+// // Add adblocker plugin to block all ads and trackers (saves bandwidth)
+// const AdblockerPlugin = require('puppeteer-extra-plugin-adblocker')
+// puppeteer.use(AdblockerPlugin({ blockTrackers: true }))
 import puppeteer from "puppeteer";
+// import stealthPlugin from "puppeteer-extra-plugin-stealth";
+// import adBlockerPlugin from "puppeteer-extra-plugin-adblocker";
 
 export async function scrapeAuto(url) {
-  const browser = await puppeteer.launch();
+  // puppeteer.use(stealthPlugin());
+  // puppeteer.use(adBlockerPlugin({ blockTrackers: true }));
+
+  const browser = await puppeteer.launch({
+    defaultViewport: null,
+  });
 
   const page = await browser.newPage();
 
-  await page.goto(url);
+  // await page.setDefaultNavigationTimeout(0);
+
+  await page.goto(url, { waitUntil: "networkidle2", timeout: 0 });
 
   const list = await page.$$("#brandTooltipBrandAutocomplete-brand > ul > li");
 
@@ -26,17 +44,38 @@ export async function scrapeAuto(url) {
 }
 
 export async function scrapeModel(url, brand) {
-  const browser = await puppeteer.launch();
+  const browser = await puppeteer.launch({ headless: true });
 
   const page = await browser.newPage();
 
-  await page.goto(url);
+  await page.goto(url, { waitUntil: "networkidle2", timeout: 0 });
+
+  // await page.waitForSelector("#brandTooltipBrandAutocompleteInput-brand");
 
   await page.type("#brandTooltipBrandAutocompleteInput-brand", brand, {
     delay: 100,
   });
 
-  await page.click("#brandTooltipBrandAutocomplete-brand > ul > li > a");
+  if (brand === "Volkswagen") {
+    await page.waitForSelector(
+      "#brandTooltipBrandAutocomplete-brand > ul > li:nth-child(2) > a"
+    );
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+  } else {
+    await page.waitForSelector(
+      "#brandTooltipBrandAutocomplete-brand > ul > li > a"
+    );
+
+    await page.click("#brandTooltipBrandAutocomplete-brand > ul > li > a");
+  }
+
+  // await page.waitForSelector(
+  //   "#brandTooltipBrandAutocomplete-brand > ul > li > a"
+  // );
+
+  // await page.click("#brandTooltipBrandAutocomplete-brand > ul > li > a");
 
   await page.waitForSelector(
     "#brandTooltipBrandAutocomplete-model > ul > li:nth-child(2)"
@@ -65,7 +104,7 @@ export async function scrapeFullInfo(url, searchParams) {
 
   const page = await browser.newPage();
 
-  await page.goto(url);
+  await page.goto(url, { waitUntil: "networkidle2", timeout: 0 });
 
   await page.type(
     "#brandTooltipBrandAutocompleteInput-brand",
@@ -73,13 +112,43 @@ export async function scrapeFullInfo(url, searchParams) {
     { delay: 100 }
   );
 
-  await page.click("#brandTooltipBrandAutocomplete-brand > ul > li > a");
+  let brandId;
+
+  if (searchParams.carBrand === "Volkswagen") {
+    await page.waitForSelector(
+      "#brandTooltipBrandAutocomplete-brand > ul > li:nth-child(2) > a"
+    );
+
+    let id = await page.$("#brandTooltipBrandAutocomplete-brand > ul > li > a");
+
+    brandId = await id.evaluate((el) => el.getAttribute("data-value"));
+
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+  } else {
+    await page.waitForSelector(
+      "#brandTooltipBrandAutocomplete-brand > ul > li > a"
+    );
+
+    let id = await page.$("#brandTooltipBrandAutocomplete-brand > ul > li > a");
+
+    brandId = await id.evaluate((el) => el.getAttribute("data-value"));
+
+    await page.click("#brandTooltipBrandAutocomplete-brand > ul > li > a");
+  }
+
+  // await page.waitForSelector(
+  //   "#brandTooltipBrandAutocomplete-brand > ul > li > a"
+  // );
+
+  // let id = await page.$("#brandTooltipBrandAutocomplete-brand > ul > li > a");
+
+  // const brandId = await id.evaluate((el) => el.getAttribute("data-value"));
+
+  // await page.click("#brandTooltipBrandAutocomplete-brand > ul > li > a");
   // await page.keyboard.press("Enter");
   // await page.keyboard.press("ArrowDown");
-
-  let id = await page.$("#brandTooltipBrandAutocomplete-brand > ul > li > a");
-
-  const brandId = await id.evaluate((el) => el.getAttribute("data-value"));
 
   await page.waitForSelector(
     "#brandTooltipBrandAutocomplete-model > ul > li:nth-child(2)"
@@ -95,7 +164,7 @@ export async function scrapeFullInfo(url, searchParams) {
     "#brandTooltipBrandAutocomplete-model > ul > li:nth-child(1) > a"
   );
 
-  id = await page.$(
+  let id = await page.$(
     "#brandTooltipBrandAutocomplete-model > ul > li:nth-child(1) > a"
   );
 
@@ -223,16 +292,16 @@ export async function scrapeNextPage(url) {
   try {
     const page = await browser.newPage();
 
-    await page.goto(url);
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 0 });
 
-    const check = await page.waitForSelector("#paginationChangeSize", {
-      timeout: 3500,
-    });
+    // const check = await page.waitForSelector("#paginationChangeSize", {
+    //   timeout: 3500,
+    // });
 
-    if (!check) {
-      await page.click("#paginationChangeSize");
-      await page.click("#paginationSizeOptions > a:nth-child(2)");
-    }
+    // if (!check) {
+    //   await page.click("#paginationChangeSize");
+    //   await page.click("#paginationSizeOptions > a:nth-child(2)");
+    // }
 
     // await page.waitForXPath('//*[@id="brandTooltip"]');
 
@@ -281,8 +350,8 @@ export async function scrapeNextPage(url) {
     const fullData = await page.evaluate(() => {
       const carsBlocks = Array.from(document.querySelectorAll(".content-bar"));
 
-      // if (!carsBlocks.length)
-      //   return "На жаль, зараз немає варіантів за обраним фільтром, спробуйте ще раз...\n";
+      if (!carsBlocks.length)
+        return "Наразі це всі варіанти за обраним фільтром...\n";
 
       const data = carsBlocks.map((car) => ({
         title: car.querySelector(".content .head-ticket .item a ").innerText,
@@ -318,12 +387,12 @@ export async function scrapeNextPage(url) {
       return data;
     });
 
-    const updUrl = page.url();
+    // const updUrl = page.url();
 
-    return [fullData, updUrl];
+    return [fullData];
   } catch (error) {
-    console.error("Error scraping next page:", error);
-    return [[], "", false];
+    console.error("Помилка при опрацюванні наступної сторінки:", error);
+    return `Помилка при опрацюванні наступної сторінки:${error}`;
   } finally {
     await browser.close();
   }

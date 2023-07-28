@@ -35,7 +35,7 @@ let modelOptions = {
   }),
 };
 
-const carsArray = await scrapeAuto("https://auto.ria.com/uk/");
+const carsArray = await scrapeAuto("https://auto.ria.com");
 
 carsArray.forEach((item, index) => {
   const replyMarkup = JSON.parse(brandOptions.reply_markup);
@@ -85,8 +85,20 @@ let lastMessageId;
 let lastUserMessageId;
 let editStatus = false;
 let sentCars = [];
-let page = 1;
+let page = 0;
 const autoSearchData = {};
+let currBrand;
+let currModel;
+// let nextCarUrl = `https://auto.ria.com/uk/search/?categories.main.id=1&price.currency=1`
+
+// 1. Price from - &price.USD.gte=111
+// 2. Price to - &price.USD.lte=99999
+// 3. Mandatory part - &indexName=auto,order_auto,newauto_search
+// 4. Brand id - &brand.id[0]=52
+// 5. Model id - &model.id[0]=457
+// 6. Year from - &year[0].gte=2010
+// 7. Year to - &year[0].lte=2023
+// 8. Cars to load amount - &size=20
 
 bot.on("message", async (msg) => {
   const text = msg.text;
@@ -97,7 +109,7 @@ bot.on("message", async (msg) => {
 
   await bot.deleteMessage(chatId, msgId);
 
-  if (text === "/startt") {
+  if (text === "/start") {
     await bot.sendMessage(chatId, textStart);
     return bot
       .sendMessage(chatId, textChooseCar, brandOptions)
@@ -254,7 +266,8 @@ bot.on("message", async (msg) => {
 
     const [fullData, brandId, modelId] = info;
 
-    console.log(brandId, modelId);
+    currBrand = brandId;
+    currModel = modelId;
 
     // actualUrl = currentUrl;
 
@@ -551,12 +564,39 @@ bot.on("callback_query", async (msg) => {
       })
       .then(() => (actualContext = "yearTo"));
   } else if (actualContext === "finish" && msg.data === "Більше варіантів") {
+    // 1. Price from - &price.USD.gte=111
+    // 2. Price to - &price.USD.lte=99999
+    // 3. Mandatory part - &indexName=auto,order_auto,newauto_search
+    // 4. Brand id - &brand.id[0]=52
+    // 5. Model id - &model.id[0]=457
+    // 6. Year from - &year[0].gte=2010
+    // 7. Year to - &year[0].lte=2023
+    // 8. Cars to load amount - &size=20
     page += 1;
-    let actualUrl = `https://auto.ria.com/uk/legkovie/${searchParams.carBrand.toLowerCase()}/${searchParams.carModel.toLowerCase()}/?page=${page}`;
-    console.log(actualUrl);
-    const nextPageInfo = await scrapeNextPage(actualUrl);
 
-    const [fullData, updUrl, isOver] = nextPageInfo;
+    let nextCarUrl = `https://auto.ria.com/uk/search/?categories.main.id=1&price.currency=1`;
+
+    if (searchParams.carBudgetFrom)
+      nextCarUrl += `&price.USD.gte=${searchParams.carBudgetFrom}`;
+
+    if (searchParams.carBudgetTo)
+      nextCarUrl += `&price.USD.lte=${searchParams.carBudgetTo}`;
+
+    nextCarUrl += `&indexName=auto,order_auto,newauto_search&brand.id[0]=${currBrand}&model.id[0]=${currModel}`;
+
+    if (searchParams.carYearFrom)
+      nextCarUrl += `&year[0].gte=${searchParams.carYearFrom}`;
+
+    if (searchParams.carBudgetTo)
+      nextCarUrl += `&year[0].lte=${searchParams.carBudgetTo}`;
+
+    nextCarUrl += `&page=${page}&size=20`;
+
+    const nextPageInfo = await scrapeNextPage(nextCarUrl);
+
+    const [fullData] = nextPageInfo;
+
+    // console.log(nextCarUrl);
 
     await bot.editMessageText(filter + "Спробую знайти варіанти для Вас...", {
       chat_id: chatId,
@@ -565,6 +605,21 @@ bot.on("callback_query", async (msg) => {
         inline_keyboard: [],
       }),
     });
+
+    if (typeof fullData === "string") {
+      return bot
+        .editMessageText(fullData + filter, {
+          chat_id: chatId,
+          message_id: lastMessageId,
+          reply_markup: JSON.stringify({
+            inline_keyboard: [
+              [{ text: "Спочатку", callback_data: "Спочатку" }],
+            ],
+          }),
+        })
+        .then(() => (actualContext = "finish"))
+        .then(() => (editStatus = false));
+    }
 
     for (const data of fullData) {
       let cap = `Марка: ${data.title} \nЦіна: ${data.price} \nПробіг: ${data.details.mileage} \nТип палива: ${data.details.fuel} \nЛокація: ${data.details.location} \nТип КПП: ${data.details.transmission} \nПосилання: ${data.link}\n`;
@@ -591,28 +646,28 @@ bot.on("callback_query", async (msg) => {
       }
     }
 
-    if (isOver) {
-      return bot
-        .editMessageText(
-          filter + "Наразі це всі варіанти за Вашим фільтром...",
-          {
-            chat_id: chatId,
-            message_id: lastMessageId,
-            reply_markup: JSON.stringify({
-              inline_keyboard: [
-                [
-                  {
-                    text: "Спочатку",
-                    callback_data: "Спочатку",
-                    disable: false,
-                  },
-                ],
-              ],
-            }),
-          }
-        )
-        .then(() => (editStatus = false));
-    }
+    // if (isOver) {
+    //   return bot
+    //     .editMessageText(
+    //       filter + "Наразі це всі варіанти за Вашим фільтром...",
+    //       {
+    //         chat_id: chatId,
+    //         message_id: lastMessageId,
+    //         reply_markup: JSON.stringify({
+    //           inline_keyboard: [
+    //             [
+    //               {
+    //                 text: "Спочатку",
+    //                 callback_data: "Спочатку",
+    //                 disable: false,
+    //               },
+    //             ],
+    //           ],
+    //         }),
+    //       }
+    //     )
+    //     .then(() => (editStatus = false));
+    // }
 
     return bot
       .editMessageText(
@@ -631,7 +686,6 @@ bot.on("callback_query", async (msg) => {
         }
       )
       .then(() => (editStatus = false));
-    // .then(() => ++page);
   } else if (msg.data === "Пропустити" && actualContext === "yearTo") {
     filter += `Рік випуску (до): не вказано ⏳\n\n`;
 
@@ -673,16 +727,12 @@ bot.on("callback_query", async (msg) => {
       })
       .then(() => (actualContext = "budgetTo"));
   } else if (msg.data === "Пропустити" && actualContext === "budgetTo") {
-    // const fullData = await scrapeFullInfo(
-    //   "https://auto.ria.com/uk/",
-    //   searchParams
-    // );
-
     const info = await scrapeFullInfo("https://auto.ria.com/uk/", searchParams);
 
-    const [fullData, currentUrl] = info;
+    const [fullData, brandId, modelId] = info;
 
-    // actualUrl = nextUrl;
+    currBrand = brandId;
+    currModel = modelId;
 
     let filter = `\nВаші налаштування:\n\nМарка: ${searchParams.carBrand} ${searchParams.carModel} 🚘\n`;
 
@@ -746,7 +796,6 @@ bot.on("callback_query", async (msg) => {
         console.error("Error sending car data:", error);
       }
     }
-    // console.log(actualUrl);
 
     return bot
       .editMessageText(
