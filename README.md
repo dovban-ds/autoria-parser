@@ -1,5 +1,5 @@
-# autoria-parser
+# ☄️ npm run dev to start the bot
 
-☄️ npm run dev to start the bot
+To start the bot use - npm run dev
 
 @AutoriaFindBot
